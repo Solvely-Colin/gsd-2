@@ -114,6 +114,31 @@ jobs:
           echo "::error::Publish step succeeded but gsd-pi@${VERSION} is not reachable on npm after 50s. Check NPM_TOKEN permissions and registry config."
           exit 1
 
+      - name: Post dev release to Discord
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_CHANGELOG_WEBHOOK }}
+          DEV_REF: ${{ github.event.inputs.ref }}
+          DEV_VERSION: ${{ steps.stamp.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK" ]; then
+            echo "DISCORD_CHANGELOG_WEBHOOK is not configured; skipping Discord announcement."
+            exit 0
+          fi
+          node <<'NODE' | curl -fsS -X POST "$DISCORD_WEBHOOK" \
+            -H "Content-Type: application/json" \
+            --data @-
+          const content = [
+            `**GSD v${process.env.DEV_VERSION} Dev Release**`,
+            "",
+            `Published to npm as \`gsd-pi@${process.env.DEV_VERSION}\` on the \`dev\` dist-tag from \`${process.env.DEV_REF}\`.`,
+            "",
+            `\`npm i gsd-pi@${process.env.DEV_VERSION}\``,
+            process.env.RUN_URL,
+          ].join("\n");
+          process.stdout.write(JSON.stringify({ content }));
+          NODE
+
   dev-verify:
     name: Dev Verify (installed package)
     needs: dev-publish
